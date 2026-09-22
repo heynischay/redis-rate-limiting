@@ -10,13 +10,14 @@ app.use(Express.json());
 // although without atomicity
 
 // rate limiting on auth route using token bucket algo
-let counter = 0;
+let acceptedCounter = 0;
+let rejectCounter = 0;
 
 app.use("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const bucketSize = 5; // maximum tokens
-    const requestsPerMinute = 4;
-    const refillRate = requestsPerMinute / 60_000; // tokens per ms
+    const bucketSize = 10; // (burst size) maximum tokens
+    const requestsPerMinute = 10;
+    const refillInterval = 60_000 / requestsPerMinute; // (6s in this implementation) tokens per ms
 
     const now = Date.now();
 
@@ -38,13 +39,15 @@ app.use("/", async (req: Request, res: Response, next: NextFunction) => {
     const elapsed = now - lastRefill;
 
     // How many tokens should have been added?
-    const tokensToAdd = elapsed * refillRate;
+    const tokensToAdd = elapsed / refillInterval;
 
-    // Refill, but never exceed bucket capacity
+    // Refil, but never exceed bucket capacity
     tokens = Math.min(bucketSize, tokens + tokensToAdd);
 
     // No token available
     if (tokens < 1) {
+      rejectCounter++;
+      console.log(rejectCounter);
       return res.status(429).json({
         message: "Try again later",
       });
@@ -67,7 +70,7 @@ app.use("/", async (req: Request, res: Response, next: NextFunction) => {
 app.post("/login", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body as { email: string; password: string };
-    console.log(`${counter++}`);
+    console.log(`accepted : ${acceptedCounter++}`);
     res.json({ message: "login" });
   } catch (error) {
     console.log(error);

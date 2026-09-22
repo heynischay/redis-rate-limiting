@@ -10,7 +10,8 @@ app.use(Express.json());
 // although without atomicity
 
 // rate limiting on auth route using sliding window log
-let counter = 0;
+let acceptedCounter = 0;
+let rejectedCounter = 0;
 app.use("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
     // rate limit of 10 request / minute
@@ -26,17 +27,16 @@ app.use("/", async (req: Request, res: Response, next: NextFunction) => {
 
     // getting total logs in current window
     const log_count = await redis.zcard("ratelimit");
-    console.log("logcount", log_count);
 
     // if limit is reached
     if (log_count >= log_size) {
-      console.log("Limit reached");
+      console.log("rejected", rejectedCounter++);
+
       return res.json({ message: "try again later" });
     }
 
     // adding req log  in memory with random hash as value to prevent multiple req at the same time
     // as sets only accepts unique values
-    console.log("counter", counter++);
     await redis.zadd("ratelimit", arrival_time, crypto.randomUUID());
 
     next();
@@ -46,6 +46,7 @@ app.use("/", async (req: Request, res: Response, next: NextFunction) => {
 app.post("/login", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body as { email: string; password: string };
+    console.log("accepted", acceptedCounter++);
 
     return res.json({ message: "you are logged in" });
   } catch (error) {
